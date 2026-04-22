@@ -30,6 +30,13 @@ jobs:
         with:
           node-version: 22
 
+      - name: Build frontend assets
+        shell: bash
+        run: |
+          cd web
+          npm install
+          NEXT_PUBLIC_APP_VERSION="$(tr -d '[:space:]' < ../VERSION)" npm run build
+
       - name: Export Python requirements
         shell: bash
         run: |

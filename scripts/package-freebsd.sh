@@ -14,10 +14,14 @@ CHECKSUM_PATH="${ARCHIVE_PATH}.sha256"
 PACKAGE_DIR="${DIST_DIR}/${PACKAGE_BASENAME}"
 PYTHON_BIN="${PYTHON_BIN:-python3.13}"
 
-echo "[1/6] Building static frontend"
-cd "${WEB_DIR}"
-npm install
-NEXT_PUBLIC_APP_VERSION="${VERSION}" npm run build
+echo "[1/6] Preparing static frontend"
+if [ -d "${WEB_DIR}/out" ]; then
+  echo "Using prebuilt web/out assets"
+else
+  cd "${WEB_DIR}"
+  npm install
+  NEXT_PUBLIC_APP_VERSION="${VERSION}" npm run build
+fi
 
 echo "[2/6] Preparing Python build environment"
 cd "${ROOT_DIR}"
