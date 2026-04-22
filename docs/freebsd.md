@@ -28,6 +28,8 @@ pip install --upgrade pip
 pip install -r requirements-freebsd.txt
 ```
 
+For serv00 `Website type = Python`, use Passenger instead of a manual port. The project root should contain `passenger_wsgi.py`, and this repository now includes that file. In the panel, point `Python binary` to your virtualenv interpreter.
+
 ## Configure
 
 Copy the example configuration and set your own auth key:

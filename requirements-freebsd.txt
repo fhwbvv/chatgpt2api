@@ -1,3 +1,4 @@
+a2wsgi>=1.10.8
 fastapi>=0.136.0
 pybase64>=1.4.3
 python-multipart>=0.0.26
