@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-set -euo pipefail
+set -eu
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 DIST_DIR="${ROOT_DIR}/dist"
 BUILD_DIR="${ROOT_DIR}/build"
 WEB_DIR="${ROOT_DIR}/web"
