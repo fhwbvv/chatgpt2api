@@ -47,7 +47,7 @@ jobs:
             python3.13 -m ensurepip --upgrade || true
           run: |
             chmod +x scripts/package-freebsd.sh
-            VERSION="${VERSION}" PACKAGE_BASENAME="${PACKAGE_BASENAME}" PYTHON_BIN="python3.13" ./scripts/package-freebsd.sh
+            PACKAGE_BASENAME="${PACKAGE_BASENAME}" PYTHON_BIN="python3.13" ./scripts/package-freebsd.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
