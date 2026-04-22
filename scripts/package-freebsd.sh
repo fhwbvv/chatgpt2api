@@ -28,7 +28,7 @@ cd "${ROOT_DIR}"
 rm -rf .venv-freebsd-build "${BUILD_DIR}" "${PACKAGE_DIR}"
 "${PYTHON_BIN}" -m venv .venv-freebsd-build
 .venv-freebsd-build/bin/pip install --upgrade pip setuptools wheel
-.venv-freebsd-build/bin/pip install -r requirements.txt pyinstaller
+.venv-freebsd-build/bin/pip install -r requirements-freebsd.txt pyinstaller
 
 echo "[3/6] Building FreeBSD executable bundle"
 .venv-freebsd-build/bin/pyinstaller \

@@ -1,6 +1,6 @@
 # FreeBSD Deployment
 
-This release is a real FreeBSD application bundle built inside a FreeBSD VM. It contains a packaged executable and its bundled runtime files instead of raw Python source-only deployment files.
+This release is intended to be a real FreeBSD application bundle built inside a FreeBSD VM. To make FreeBSD and serv00 deployment possible, the project now falls back to a standard `requests` session when `curl-cffi` is unavailable.
 
 ## Included Files
 
@@ -18,6 +18,15 @@ The archive contains:
 - one available TCP port
 
 No separate Python installation is required to run the packaged build.
+
+If you deploy from the source tree on serv00 instead of using a release archive, create a virtual environment and install:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements-freebsd.txt
+```
 
 ## Configure
 

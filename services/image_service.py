@@ -9,9 +9,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional
 
-from curl_cffi.requests import Session
-
 from services.account_service import account_service
+from services.http_session import Session
 from services import proof_of_work
 
 

@@ -37,12 +37,6 @@ jobs:
           npm install
           NEXT_PUBLIC_APP_VERSION="$(tr -d '[:space:]' < ../VERSION)" npm run build
 
-      - name: Export Python requirements
-        shell: bash
-        run: |
-          python3 -m pip install --upgrade uv
-          uv export --frozen --no-dev --format requirements-txt --no-hashes -o requirements.txt
-
       - name: Build FreeBSD packaged app
         uses: vmactions/freebsd-vm@v1
         with:
