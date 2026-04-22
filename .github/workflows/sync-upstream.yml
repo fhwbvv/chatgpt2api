@@ -44,7 +44,10 @@ jobs:
             --exclude '.github/workflows/' \
             --exclude 'docs/freebsd.md' \
             --exclude 'scripts/package-freebsd.sh' \
-            --exclude 'scripts/start-freebsd.sh'
+            --exclude 'services/api.py' \
+            --exclude 'services/config.py' \
+            --exclude 'services/paths.py' \
+            --exclude 'services/version.py'
 
       - name: Commit synced changes
         id: commit

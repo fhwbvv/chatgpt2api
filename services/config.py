@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+from services.paths import get_base_dir
+
+BASE_DIR = get_base_dir()
 DATA_DIR = BASE_DIR / "data"
 CONFIG_FILE = BASE_DIR / "config.json"
 
@@ -71,10 +73,24 @@ def _load_settings() -> AppSettings:
         int, raw_config.get("refresh_account_interval_minute", 60)
     )
 
+    host = str(
+        os.getenv("CHATGPT2API_HOST")
+        or os.getenv("HOST")
+        or raw_config.get("host")
+        or "0.0.0.0"
+    ).strip() or "0.0.0.0"
+
+    port = int(
+        os.getenv("CHATGPT2API_PORT")
+        or os.getenv("PORT")
+        or raw_config.get("port")
+        or 8000
+    )
+
     return AppSettings(
         auth_key=auth_key,
-        host="0.0.0.0",
-        port=8000,
+        host=host,
+        port=port,
         accounts_file=DATA_DIR / "accounts.json",
         refresh_account_interval_minute=refresh_account_interval_minute,
     )

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
+from services.paths import get_base_dir
 
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+BASE_DIR = get_base_dir()
 VERSION_FILE = BASE_DIR / "VERSION"
 
 

@@ -1,42 +1,60 @@
 # FreeBSD Deployment
 
-This repository publishes a FreeBSD deployment archive that tracks the upstream `basketikun/chatgpt2api` source tree and reuses the upstream `VERSION` file as the GitHub Release tag.
+This release is a real FreeBSD application bundle built inside a FreeBSD VM. It contains a packaged executable and its bundled runtime files instead of raw Python source-only deployment files.
 
 ## Included Files
 
-The release archive contains:
+The archive contains:
 
-- Python application source code
-- prebuilt static frontend files in `web_dist/`
-- `requirements.txt` exported from `uv.lock`
-- `scripts/start-freebsd.sh` for bootstrapping the runtime environment on FreeBSD
+- `chatgpt2api`: FreeBSD executable entrypoint
+- `_internal/`: bundled Python runtime and dependencies
+- `web_dist/`: prebuilt static frontend files
+- `config.json.example`: sample configuration
+- `docs/freebsd.md`: deployment notes
 
 ## Requirements
 
-- `python3.13`
-- `py313-pip`
-- network access for the first dependency install
+- FreeBSD amd64
+- one available TCP port
 
-Example on FreeBSD:
+No separate Python installation is required to run the packaged build.
+
+## Configure
+
+Copy the example configuration and set your own auth key:
 
 ```sh
-pkg update
-pkg install -y python3.13 py313-pip
+cp config.json.example config.json
 ```
+
+Example:
+
+```json
+{
+  "auth-key": "replace-with-your-own-secret",
+  "refresh_account_interval_minute": 60,
+  "host": "127.0.0.1",
+  "port": 18080
+}
+```
+
+You can also override host and port via environment variables:
+
+- `HOST`
+- `PORT`
+- `CHATGPT2API_AUTH_KEY`
 
 ## Start
 
 ```sh
 tar -xzf chatgpt2api-freebsd-amd64-<version>.tar.gz
 cd chatgpt2api-freebsd-amd64
-chmod +x scripts/start-freebsd.sh
-./scripts/start-freebsd.sh
+chmod +x ./chatgpt2api
+./chatgpt2api
 ```
 
-Optional environment variables:
+For serv00, bind to localhost and reverse proxy the reserved port from your domain:
 
-- `PYTHON_BIN`: custom Python interpreter path, default prefers `python3.13`
-- `HOST`: bind address, default `0.0.0.0`
-- `PORT`: listen port, default `8000`
-
-The first start creates `.venv/`, installs Python dependencies from `requirements.txt`, and then runs `uvicorn`.
+```sh
+HOST=127.0.0.1 PORT=18080 ./chatgpt2api
+```

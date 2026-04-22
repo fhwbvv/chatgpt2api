@@ -30,21 +30,23 @@ jobs:
         with:
           node-version: 22
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Build FreeBSD deployment archive
+      - name: Export Python requirements
         shell: bash
         run: |
-          chmod +x scripts/package-freebsd.sh
-          VERSION="${VERSION}" PACKAGE_BASENAME="${PACKAGE_BASENAME}" ./scripts/package-freebsd.sh
+          python3 -m pip install --upgrade uv
+          uv export --frozen --no-dev --format requirements-txt --no-hashes -o requirements.txt
+
+      - name: Build FreeBSD packaged app
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "14.4"
+          usesh: true
+          mem: 4096
+          prepare: |
+            pkg install -y node python313 py313-pip py313-setuptools py313-wheel py313-virtualenv
+          run: |
+            chmod +x scripts/package-freebsd.sh
+            VERSION="${VERSION}" PACKAGE_BASENAME="${PACKAGE_BASENAME}" PYTHON_BIN="python3.13" ./scripts/package-freebsd.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -64,4 +66,3 @@ jobs:
             dist/*.tar.gz
             dist/*.sha256
             docs/freebsd.md
-            scripts/start-freebsd.sh

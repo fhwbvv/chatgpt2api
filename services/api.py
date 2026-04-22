@@ -16,9 +16,10 @@ from services.config import config
 from services.cpa_service import cpa_config, cpa_import_service, list_remote_files
 
 from services.image_service import ImageGenerationError
+from services.paths import get_base_dir
 from services.version import get_app_version
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+BASE_DIR = get_base_dir()
 WEB_DIST_DIR = BASE_DIR / "web_dist"
 
 
