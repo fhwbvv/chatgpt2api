@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from typing import Iterable
 
 from fastapi import HTTPException
@@ -182,7 +183,7 @@ class ChatGPTService:
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
 
-        return build_chat_image_completion(model, prompt, image_result)
+        return build_chat_image_completion(model, prompt, self._export_image_result_as_b64(image_result))
 
     def create_response(self, body: dict[str, object]) -> dict[str, object]:
         if bool(body.get("stream")):
@@ -209,6 +210,7 @@ class ChatGPTService:
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
 
+        image_result = self._export_image_result_as_b64(image_result)
         image_items = image_result.get("data") if isinstance(image_result.get("data"), list) else []
         output = []
         for item in image_items:
@@ -241,4 +243,25 @@ class ChatGPTService:
             "model": model,
             "output": output,
             "parallel_tool_calls": False,
+        }
+
+    @staticmethod
+    def _export_image_result_as_b64(image_result: dict[str, object]) -> dict[str, object]:
+        data = image_result.get("data")
+        if not isinstance(data, list):
+            return image_result
+
+        exported_data: list[dict[str, object]] = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            exported_item = dict(item)
+            image_bytes = exported_item.get("image_bytes")
+            if isinstance(image_bytes, bytes) and "b64_json" not in exported_item:
+                exported_item["b64_json"] = base64.b64encode(image_bytes).decode("ascii")
+            exported_data.append(exported_item)
+
+        return {
+            **image_result,
+            "data": exported_data,
         }

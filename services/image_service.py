@@ -53,8 +53,9 @@ class ImageGenerationError(Exception):
 
 @dataclass
 class GeneratedImage:
-    b64_json: str
+    image_bytes: bytes
     revised_prompt: str
+    mime_type: str = "image/png"
     url: str = ""
 
 
@@ -614,11 +615,12 @@ def _fetch_download_url(session: Session, access_token: str, device_id: str, con
     return str((response.json() or {}).get("download_url") or "")
 
 
-def _download_as_base64(session: Session, download_url: str) -> str:
+def _download_image_bytes(session: Session, download_url: str) -> tuple[bytes, str]:
     response = session.get(download_url, timeout=60)
     if not response.ok or not response.content:
         raise ImageGenerationError("download image failed")
-    return base64.b64encode(response.content).decode("ascii")
+    mime_type = str(response.headers.get("content-type") or "image/png").split(";")[0].strip() or "image/png"
+    return response.content, mime_type
 
 
 def _resolve_upstream_model(access_token: str, requested_model: str) -> str:
@@ -683,15 +685,18 @@ def generate_image_result(access_token: str, prompt: str, model: str = DEFAULT_M
         download_url = _fetch_download_url(session, access_token, device_id, actual_conversation_id, first_file_id)
         if not download_url:
             raise ImageGenerationError("failed to get download url")
-        result = GeneratedImage(
-            b64_json=_download_as_base64(session, download_url),
-            revised_prompt=prompt,
-            url=download_url,
-        )
+        image_bytes, mime_type = _download_image_bytes(session, download_url)
+        result = GeneratedImage(image_bytes=image_bytes, revised_prompt=prompt, mime_type=mime_type, url=download_url)
         print(f"[image-upstream] success token={access_token[:12]}... images=1")
         return {
             "created": time.time_ns() // 1_000_000_000,
-            "data": [{"b64_json": result.b64_json, "revised_prompt": result.revised_prompt}],
+            "data": [
+                {
+                    "image_bytes": result.image_bytes,
+                    "mime_type": result.mime_type,
+                    "revised_prompt": result.revised_prompt,
+                }
+            ],
         }
     except Exception as exc:
         print(f"[image-upstream] fail token={access_token[:12]}... error={exc}")
@@ -817,15 +822,18 @@ def edit_image_result(
         download_url = _fetch_download_url(session, access_token, device_id, actual_conversation_id, first_file_id)
         if not download_url:
             raise ImageGenerationError("failed to get download url")
-        result = GeneratedImage(
-            b64_json=_download_as_base64(session, download_url),
-            revised_prompt=prompt,
-            url=download_url,
-        )
+        image_bytes, mime_type = _download_image_bytes(session, download_url)
+        result = GeneratedImage(image_bytes=image_bytes, revised_prompt=prompt, mime_type=mime_type, url=download_url)
         print(f"[image-edit-upstream] success token={access_token[:12]}... inputs={len(uploaded_images)}")
         return {
             "created": time.time_ns() // 1_000_000_000,
-            "data": [{"b64_json": result.b64_json, "revised_prompt": result.revised_prompt}],
+            "data": [
+                {
+                    "image_bytes": result.image_bytes,
+                    "mime_type": result.mime_type,
+                    "revised_prompt": result.revised_prompt,
+                }
+            ],
         }
     except Exception as exc:
         print(f"[image-edit-upstream] fail token={access_token[:12]}... error={exc}")

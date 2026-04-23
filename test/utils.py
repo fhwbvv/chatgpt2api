@@ -45,3 +45,18 @@ def save_image(image_b64: str, name: str) -> Path:
     path = OUTPUT_DIR / f"{name}_{int(time.time())}{detect_ext(image_bytes)}"
     path.write_bytes(image_bytes)
     return path
+
+
+def save_image_item(item: dict, name: str) -> Path:
+    image_url = str(item.get("url") or "").strip()
+    if image_url:
+        with urllib.request.urlopen(image_url) as response:
+            image_bytes = response.read()
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        path = OUTPUT_DIR / f"{name}_{int(time.time())}{detect_ext(image_bytes)}"
+        path.write_bytes(image_bytes)
+        return path
+    image_b64 = str(item.get("b64_json") or "").strip()
+    if not image_b64:
+        raise ValueError("image item must include url or b64_json")
+    return save_image(image_b64, name)

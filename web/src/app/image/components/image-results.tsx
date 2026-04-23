@@ -3,7 +3,7 @@ import { LoaderCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { ImageLightbox } from "@/components/image-lightbox";
-import type { ImageConversation, StoredImage } from "@/store/image-conversations";
+import { getStoredImageSrc, type ImageConversation, type StoredImage } from "@/store/image-conversations";
 
 type ImageResultsProps = {
   selectedConversation: ImageConversation | null;
@@ -152,15 +152,30 @@ function ImageResultCard({
   index: number;
   onOpen: (imageId: string) => void;
 }) {
-  if (image.status === "success" && image.b64_json) {
+  const imageSrc = getStoredImageSrc(image);
+
+  if (image.status === "success" && imageSrc) {
     return (
-      <button type="button" onClick={() => onOpen(image.id)} className="group block w-full cursor-zoom-in">
-        <img
-          src={`data:image/png;base64,${image.b64_json}`}
-          alt={`Generated result ${index + 1}`}
-          className="block h-auto w-full transition duration-200 group-hover:brightness-90"
-        />
-      </button>
+      <div className="overflow-hidden rounded-[22px] bg-white">
+        <button type="button" onClick={() => onOpen(image.id)} className="group block w-full cursor-zoom-in">
+          <img
+            src={imageSrc}
+            alt={`Generated result ${index + 1}`}
+            className="block h-auto w-full transition duration-200 group-hover:brightness-90"
+          />
+        </button>
+        <div className="flex justify-end px-2 pb-2 pt-1">
+          <a
+            href={imageSrc}
+            download={`chat2api-image-${index + 1}`}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-600 transition hover:bg-stone-200 hover:text-stone-900"
+          >
+            Download
+          </a>
+        </div>
+      </div>
     );
   }
 

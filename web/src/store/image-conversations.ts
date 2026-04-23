@@ -15,9 +15,20 @@ export type StoredReferenceImage = {
 export type StoredImage = {
   id: string;
   status?: "loading" | "success" | "error";
+  url?: string;
   b64_json?: string;
   error?: string;
 };
+
+export function getStoredImageSrc(image: StoredImage): string | null {
+  if (image.url) {
+    return image.url;
+  }
+  if (image.b64_json) {
+    return `data:image/png;base64,${image.b64_json}`;
+  }
+  return null;
+}
 
 export type ImageConversationStatus = "generating" | "success" | "error";
 
@@ -48,7 +59,7 @@ function normalizeStoredImage(image: StoredImage): StoredImage {
   }
   return {
     ...image,
-    status: image.b64_json ? "success" : "loading",
+    status: image.url || image.b64_json ? "success" : "loading",
   };
 }
 

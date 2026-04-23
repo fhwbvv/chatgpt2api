@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import base64
 from contextlib import asynccontextmanager
 from pathlib import Path
 from threading import Event, Thread
 
-from fastapi import APIRouter, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -14,6 +15,7 @@ from services.account_service import account_service
 from services.chatgpt_service import ChatGPTService
 from services.config import config
 from services.cpa_service import cpa_config, cpa_import_service, list_remote_files
+from services.generated_image_store import generated_image_store
 
 from services.image_service import ImageGenerationError
 from services.paths import get_base_dir
@@ -21,6 +23,8 @@ from services.version import get_app_version
 
 BASE_DIR = get_base_dir()
 WEB_DIST_DIR = BASE_DIR / "web_dist"
+SOURCE_WEB_OUT_DIR = BASE_DIR / "web" / "out"
+IMAGE_RESPONSE_FORMATS = {"b64_json", "url"}
 
 
 class ImageGenerationRequest(BaseModel):
@@ -141,28 +145,75 @@ def start_limited_account_watcher(stop_event: Event) -> Thread:
     return thread
 
 
+def normalize_image_response_format(value: str) -> str:
+    normalized = str(value or "b64_json").strip().lower() or "b64_json"
+    if normalized not in IMAGE_RESPONSE_FORMATS:
+        raise HTTPException(status_code=400, detail={"error": "response_format must be one of: b64_json, url"})
+    return normalized
+
+
+def serialize_image_result(image_result: dict[str, object], response_format: str, request: Request) -> dict[str, object]:
+    normalized_format = normalize_image_response_format(response_format)
+    data = image_result.get("data")
+    serialized_items: list[dict[str, object]] = []
+
+    if isinstance(data, list):
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            raw_bytes = item.get("image_bytes")
+            image_bytes = bytes(raw_bytes) if isinstance(raw_bytes, (bytes, bytearray)) else None
+            revised_prompt = str(item.get("revised_prompt") or "").strip()
+            response_item: dict[str, object] = {"revised_prompt": revised_prompt}
+
+            if normalized_format == "url":
+                if image_bytes is None:
+                    b64_json = str(item.get("b64_json") or "").strip()
+                    if not b64_json:
+                        continue
+                    image_bytes = base64.b64decode(b64_json)
+                stored_image = generated_image_store.save(image_bytes)
+                response_item["url"] = str(request.url_for("serve_generated_image", image_name=stored_image.filename))
+            else:
+                b64_json = str(item.get("b64_json") or "").strip()
+                if not b64_json:
+                    if image_bytes is None:
+                        continue
+                    b64_json = base64.b64encode(image_bytes).decode("ascii")
+                response_item["b64_json"] = b64_json
+
+            serialized_items.append(response_item)
+
+    return {
+        "created": image_result.get("created"),
+        "data": serialized_items,
+    }
+
+
 def resolve_web_asset(requested_path: str) -> Path | None:
-    if not WEB_DIST_DIR.exists():
+    web_roots = [path for path in (WEB_DIST_DIR, SOURCE_WEB_OUT_DIR) if path.exists()]
+    if not web_roots:
         return None
 
     clean_path = requested_path.strip("/")
-    if not clean_path:
-        candidates = [WEB_DIST_DIR / "index.html"]
-    else:
-        relative_path = Path(clean_path)
-        candidates = [
-            WEB_DIST_DIR / relative_path,
-            WEB_DIST_DIR / relative_path / "index.html",
-            WEB_DIST_DIR / f"{clean_path}.html",
-        ]
+    for web_root in web_roots:
+        if not clean_path:
+            candidates = [web_root / "index.html"]
+        else:
+            relative_path = Path(clean_path)
+            candidates = [
+                web_root / relative_path,
+                web_root / relative_path / "index.html",
+                web_root / f"{clean_path}.html",
+            ]
 
-    for candidate in candidates:
-        try:
-            candidate.relative_to(WEB_DIST_DIR)
-        except ValueError:
-            continue
-        if candidate.is_file():
-            return candidate
+        for candidate in candidates:
+            try:
+                candidate.relative_to(web_root)
+            except ValueError:
+                continue
+            if candidate.is_file():
+                return candidate
 
     return None
 
@@ -273,20 +324,27 @@ def create_app() -> FastAPI:
         return {"item": account, "items": account_service.list_accounts()}
 
     @router.post("/v1/images/generations")
-    async def generate_images(body: ImageGenerationRequest, authorization: str | None = Header(default=None)):
+    async def generate_images(
+        body: ImageGenerationRequest,
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ):
         require_auth_key(authorization)
         try:
-            return await run_in_threadpool(chatgpt_service.generate_with_pool, body.prompt, body.model, body.n)
+            image_result = await run_in_threadpool(chatgpt_service.generate_with_pool, body.prompt, body.model, body.n)
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
+        return serialize_image_result(image_result, body.response_format, request)
 
     @router.post("/v1/images/edits")
     async def edit_images(
+            request: Request,
             authorization: str | None = Header(default=None),
             image: list[UploadFile] = File(...),
             prompt: str = Form(...),
             model: str = Form(default="gpt-image-1"),
             n: int = Form(default=1),
+            response_format: str = Form(default="b64_json"),
     ):
         require_auth_key(authorization)
         if n < 1 or n > 4:
@@ -303,11 +361,19 @@ def create_app() -> FastAPI:
             images.append((image_data, file_name, mime_type))
 
         try:
-            return await run_in_threadpool(
+            image_result = await run_in_threadpool(
                 chatgpt_service.edit_with_pool, prompt, images, model, n
             )
         except ImageGenerationError as exc:
             raise HTTPException(status_code=502, detail={"error": str(exc)}) from exc
+        return serialize_image_result(image_result, response_format, request)
+
+    @router.get("/v1/images/files/{image_name}", name="serve_generated_image")
+    async def serve_generated_image(image_name: str):
+        image_path = generated_image_store.resolve(image_name)
+        if image_path is None:
+            raise HTTPException(status_code=404, detail="Not Found")
+        return FileResponse(image_path)
 
     @router.post("/v1/chat/completions")
     async def create_chat_completion(body: ChatCompletionRequest, authorization: str | None = Header(default=None)):

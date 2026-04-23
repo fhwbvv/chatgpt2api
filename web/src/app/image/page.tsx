@@ -11,6 +11,7 @@ import { ImageSidebar } from "@/app/image/components/image-sidebar";
 import {
   clearImageConversations,
   deleteImageConversation,
+  getStoredImageSrc,
   listImageConversations,
   saveImageConversation,
   type ImageConversation,
@@ -139,8 +140,14 @@ export default function ImagePage() {
   const lightboxImages = useMemo(
     () =>
       (selectedConversation?.images ?? [])
-        .filter((img): img is StoredImage & { b64_json: string } => img.status === "success" && !!img.b64_json)
-        .map((img) => ({ id: img.id, src: `data:image/png;base64,${img.b64_json}` })),
+        .map((img) => {
+          const src = getStoredImageSrc(img);
+          if (img.status !== "success" || !src) {
+            return null;
+          }
+          return { id: img.id, src };
+        })
+        .filter((img): img is { id: string; src: string } => img !== null),
     [selectedConversation],
   );
 
@@ -383,13 +390,14 @@ export default function ImagePage() {
               ? await editImage(referenceImageFiles, prompt, imageModel)
               : await generateImage(prompt, imageModel);
           const first = data.data?.[0];
-          if (!first?.b64_json) {
+          if (!first?.url && !first?.b64_json) {
             throw new Error(`第 ${index + 1} 张没有返回图片数据`);
           }
 
           const nextImage: StoredImage = {
             id: `${conversationId}-${index}`,
             status: "success",
+            url: first.url,
             b64_json: first.b64_json,
           };
 
