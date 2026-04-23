@@ -47,6 +47,7 @@ class ChatGPTService:
     def generate_with_pool(self, prompt: str, model: str, n: int):
         created = None
         image_items: list[dict[str, object]] = []
+        last_error_message: str | None = None
 
         for index in range(1, n + 1):
             while True:
@@ -54,6 +55,7 @@ class ChatGPTService:
                     request_token = self.account_service.get_available_access_token()
                 except RuntimeError as exc:
                     print(f"[image-generate] stop index={index}/{n} error={exc}")
+                    last_error_message = str(exc)
                     break
 
                 print(f"[image-generate] start pooled token={request_token[:12]}... model={model} index={index}/{n}")
@@ -73,6 +75,7 @@ class ChatGPTService:
                 except ImageGenerationError as exc:
                     account = self.account_service.mark_image_result(request_token, success=False)
                     message = str(exc)
+                    last_error_message = message
                     print(
                         f"[image-generate] fail pooled token={request_token[:12]}... "
                         f"error={message} quota={account.get('quota') if account else 'unknown'} status={account.get('status') if account else 'unknown'}"
@@ -84,7 +87,7 @@ class ChatGPTService:
                     break
 
         if not image_items:
-            raise ImageGenerationError("image generation failed")
+            raise ImageGenerationError(last_error_message or "image generation failed")
 
         return {
             "created": created,
@@ -100,6 +103,7 @@ class ChatGPTService:
     ):
         created = None
         image_items: list[dict[str, object]] = []
+        last_error_message: str | None = None
         normalized_images = list(images)
         if not normalized_images:
             raise ImageGenerationError("image is required")
@@ -110,6 +114,7 @@ class ChatGPTService:
                     request_token = self.account_service.get_available_access_token()
                 except RuntimeError as exc:
                     print(f"[image-edit] stop index={index}/{n} error={exc}")
+                    last_error_message = str(exc)
                     break
 
                 print(
@@ -132,6 +137,7 @@ class ChatGPTService:
                 except ImageGenerationError as exc:
                     account = self.account_service.mark_image_result(request_token, success=False)
                     message = str(exc)
+                    last_error_message = message
                     print(
                         f"[image-edit] fail pooled token={request_token[:12]}... "
                         f"error={message} quota={account.get('quota') if account else 'unknown'} status={account.get('status') if account else 'unknown'}"
@@ -143,7 +149,7 @@ class ChatGPTService:
                     break
 
         if not image_items:
-            raise ImageGenerationError("image edit failed")
+            raise ImageGenerationError(last_error_message or "image edit failed")
 
         return {
             "created": created,
