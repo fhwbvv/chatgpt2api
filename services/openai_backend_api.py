@@ -2,14 +2,17 @@ import base64
 import json
 import os
 import re
+import struct
 import time
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Iterator, Optional
 
-import tiktoken
-from PIL import Image
+try:
+    import tiktoken
+except ImportError:
+    tiktoken = None
 
 from services.account_service import account_service
 from services.config import config
@@ -36,6 +39,49 @@ DEFAULT_CLIENT_BUILD_NUMBER = "5955942"
 DEFAULT_POW_SCRIPT = "https://chatgpt.com/backend-api/sentinel/sdk.js"
 CODEX_IMAGE_MODEL = "codex-gpt-image-2"
 CODEX_RESPONSE_MODEL = "gpt-5.4"
+
+
+class _FallbackEncoding:
+    def encode(self, text: str) -> list[int]:
+        return list(str(text or "").encode("utf-8"))
+
+
+def _detect_image_mime(image_data: bytes) -> str:
+    if image_data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if image_data.startswith(b"RIFF") and image_data[8:12] == b"WEBP":
+        return "image/webp"
+    if image_data.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    return "image/png"
+
+
+def _get_image_dimensions(image_data: bytes) -> tuple[int, int]:
+    if image_data[:8] == b"\x89PNG\r\n\x1a\n" and len(image_data) >= 24:
+        width, height = struct.unpack(">II", image_data[16:24])
+        return width, height
+    if image_data[:2] == b"\xff\xd8":
+        data = BytesIO(image_data)
+        data.read(2)
+        while True:
+            marker = data.read(2)
+            if len(marker) < 2 or marker[0] != 0xFF:
+                break
+            if marker[1] in (0xC0, 0xC1, 0xC2):
+                data.read(3)
+                h_bytes = data.read(2)
+                w_bytes = data.read(2)
+                if len(h_bytes) == 2 and len(w_bytes) == 2:
+                    height = struct.unpack(">H", h_bytes)[0]
+                    width = struct.unpack(">H", w_bytes)[0]
+                    return width, height
+                break
+            length_bytes = data.read(2)
+            if len(length_bytes) < 2:
+                break
+            length = struct.unpack(">H", length_bytes)[0]
+            data.read(max(0, length - 2))
+    return 1024, 1024
 
 
 class OpenAIBackendAPI:
@@ -385,11 +431,7 @@ class OpenAIBackendAPI:
     def _image_to_data_url(self, image: str) -> str:
         """把本地图片路径或 base64 图片统一转成 data URL。"""
         data = self._decode_image_base64(image)
-        try:
-            opened = Image.open(BytesIO(data))
-            mime_type = Image.MIME.get(opened.format, "image/png")
-        except Exception:
-            mime_type = "image/png"
+        mime_type = _detect_image_mime(data)
         return f"data:{mime_type};base64,{base64.b64encode(data).decode()}"
 
     def _upload_image(self, image: str, file_name: str = "image.png") -> Dict[str, Any]:
@@ -405,9 +447,8 @@ class OpenAIBackendAPI:
             candidate_path = Path(os.path.expanduser(image))
             if candidate_path.exists() and candidate_path.is_file():
                 file_name = candidate_path.name
-        image = Image.open(BytesIO(data))
-        width, height = image.size
-        mime_type = Image.MIME.get(image.format, "image/png")
+        width, height = _get_image_dimensions(data)
+        mime_type = _detect_image_mime(data)
         path = "/backend-api/files"
         response = self.session.post(
             self.base_url + path,
@@ -1120,13 +1161,18 @@ class OpenAIBackendAPI:
 
     def _encoding_for_model(self, model: str):
         """按模型选择 tokenizer，失败时回退到通用编码。"""
+        if tiktoken is None:
+            return _FallbackEncoding()
         try:
             return tiktoken.encoding_for_model(model)
-        except KeyError:
+        except Exception:
             try:
                 return tiktoken.get_encoding("o200k_base")
-            except KeyError:
-                return tiktoken.get_encoding("cl100k_base")
+            except Exception:
+                try:
+                    return tiktoken.get_encoding("cl100k_base")
+                except Exception:
+                    return _FallbackEncoding()
 
     def _count_message_tokens(self, messages: list[Dict[str, Any]], model: str) -> int:
         """估算标准 chat messages 的 token 数。"""
