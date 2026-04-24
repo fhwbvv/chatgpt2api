@@ -10,10 +10,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 
-from curl_cffi.requests import Session
-
 from services.account_service import account_service
 from services.config import DATA_DIR
+from services.http_session import Session
 from services.proxy_service import proxy_settings
 
 

@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, Optional
 
 import tiktoken
-from curl_cffi import requests
 from PIL import Image
 
 from services.account_service import account_service
 from services.config import config
+from services.http_session import requests
 from services.proxy_service import proxy_settings
 from utils.helper import build_chat_image_markdown_content, ensure_ok, new_uuid, parse_sse_lines
 from utils.log import logger

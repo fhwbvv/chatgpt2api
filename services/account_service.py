@@ -9,9 +9,8 @@ from threading import Lock
 from typing import Any
 from datetime import datetime
 
-from curl_cffi.requests import Session
-
 from services.config import config
+from services.http_session import Session
 from services.proxy_service import proxy_settings
 from utils.helper import anonymize_token
 

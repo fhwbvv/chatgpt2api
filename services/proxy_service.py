@@ -5,9 +5,8 @@ from __future__ import annotations
 import time
 from urllib.parse import urlparse
 
-from curl_cffi.requests import Session
-
 from services.config import config
+from services.http_session import Session
 
 
 class ProxySettingsStore:

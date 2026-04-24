@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 try:
+    from curl_cffi import requests as requests
     from curl_cffi.requests import Session as Session
 
     SESSION_BACKEND = "curl_cffi"
 except ImportError:
-    import requests
+    import requests as requests
 
     SESSION_BACKEND = "requests"
 
