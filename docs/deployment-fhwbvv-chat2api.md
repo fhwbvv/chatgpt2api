@@ -14,8 +14,6 @@ Compared with a plain upstream checkout, this fork currently includes deployment
 - frontend build uses Webpack instead of Turbopack
 - source deployments can serve frontend assets directly from `web/out`
 - image frontend flow supports URL-based image delivery
-- FreeBSD source deployment avoids hard dependence on `Pillow` and `tiktoken`
-- FreeBSD source deployment keeps HTTP client fallback through `requests` when `curl_cffi` is unavailable
 
 ## Deployment Modes
 
@@ -133,24 +131,6 @@ Important:
 - this is required on `freebsd/x64`
 - do not switch it back to plain `next build` unless platform support changes
 
-### 7.1 FreeBSD dependency notes
-
-For source deployment on serv00, use:
-
-```sh
-pip install -r requirements-freebsd.txt
-```
-
-The current FreeBSD requirements intentionally keep the dependency set smaller than the main Linux/Docker path.
-
-Important notes:
-
-- `Pillow` is not required for serv00 startup in the current fork
-- `tiktoken` is not required for serv00 startup in the current fork
-- `curl_cffi` is not required for serv00 startup in the current fork
-
-The code now includes fallback behavior so these native-heavy dependencies do not block serv00 source deployment.
-
 ### 8. Restart the site
 
 ```sh
@@ -190,8 +170,6 @@ cd ..
 devil www restart chatgpt2api.u99.serv00.net
 ```
 
-If `pip install` previously failed while compiling `Pillow`, retry after pulling the current fork state. The latest FreeBSD requirements no longer require building `Pillow` or `tiktoken` for startup.
-
 ## How Frontend Hosting Works In This Fork
 
 The backend now resolves frontend assets in this order:
@@ -221,24 +199,13 @@ This avoids large terminal output and oversized browser-stored Base64 history fo
 
 At the time of writing:
 
-- the fork was manually synced to the latest upstream main on 2026-04-24
-- automatic packaging was intentionally changed to follow upstream formal releases only
-- this means upstream Docker image updates may appear before this fork auto-packages a new FreeBSD build
+- this fork is not fully synced with upstream `basketikun/chatgpt2api`
+- upstream has newer changes for:
+  - image frontend
+  - settings page
+  - proxy/settings/sub2api integration
 
-That behavior is intentional: the fork should not auto-package intermediate upstream main states unless explicitly synced.
-
-## Release And Packaging Policy
-
-Current automation policy:
-
-- upstream sync workflow checks for the latest formal upstream release
-- if upstream has not published a formal release, auto-sync is skipped
-- if the release tag already exists in the fork, auto-sync is skipped
-- FreeBSD packaging runs on:
-  - tag push
-  - manual workflow dispatch
-
-This avoids packaging random in-progress upstream `main` states.
+If you want the fork UI to match upstream more closely, plan a selective sync or merge for those areas.
 
 ## Troubleshooting
 
