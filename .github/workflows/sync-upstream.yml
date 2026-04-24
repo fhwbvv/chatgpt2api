@@ -12,7 +12,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.release.outputs.release_tag }}
+      version: ${{ steps.sync.outputs.version }}
       has_changes: ${{ steps.commit.outputs.has_changes }}
     steps:
       - name: Checkout target repository
@@ -21,73 +21,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Detect latest upstream release
-        id: release
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import os
-          import urllib.error
-          import urllib.request
-
-          request = urllib.request.Request(
-              "https://api.github.com/repos/basketikun/chatgpt2api/releases/latest",
-              headers={"Accept": "application/vnd.github+json", "User-Agent": "github-actions"},
-          )
-          try:
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  payload = json.load(response)
-          except urllib.error.HTTPError as exc:
-              if exc.code == 404:
-                  print("has_release=false")
-                  print("release_tag=")
-                  raise SystemExit(0)
-              raise
-
-          release_tag = str(payload.get("tag_name") or "").strip()
-          if not release_tag:
-              print("has_release=false")
-              print("release_tag=")
-              raise SystemExit(0)
-
-          print("has_release=true")
-          print(f"release_tag={release_tag}")
-          PY
-
-      - name: Stop when upstream has no release
-        if: steps.release.outputs.has_release != 'true'
-        shell: bash
-        run: |
-          echo "No upstream release found. Skipping sync."
-          exit 0
-
-      - name: Stop when release tag already exists in fork
-        id: existing-tag
-        shell: bash
-        run: |
-          set -euo pipefail
-          release_tag="${{ steps.release.outputs.release_tag }}"
-          if git rev-parse -q --verify "refs/tags/$release_tag" >/dev/null; then
-            echo "has_tag=true" >> "$GITHUB_OUTPUT"
-            echo "Release tag $release_tag already exists in fork. Skipping sync."
-            exit 0
-          fi
-          echo "has_tag=false" >> "$GITHUB_OUTPUT"
-
       - name: Clone basketikun upstream
-        if: steps.release.outputs.has_release == 'true' && steps.existing-tag.outputs.has_tag != 'true'
         shell: bash
         run: |
           rm -rf /tmp/upstream-chatgpt2api
           git clone https://github.com/basketikun/chatgpt2api.git /tmp/upstream-chatgpt2api
-          cd /tmp/upstream-chatgpt2api
-          git checkout "${{ steps.release.outputs.release_tag }}"
 
       - name: Sync upstream files while keeping fork automation
         id: sync
-        if: steps.release.outputs.has_release == 'true' && steps.existing-tag.outputs.has_tag != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -96,6 +37,7 @@ jobs:
             echo "VERSION file is empty."
             exit 1
           fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
           rsync -a --delete /tmp/upstream-chatgpt2api/ ./ \
             --exclude '.git/' \
@@ -104,7 +46,6 @@ jobs:
             --exclude 'scripts/package-freebsd.sh'
 
       - name: Re-apply fork deployment patches
-        if: steps.release.outputs.has_release == 'true' && steps.existing-tag.outputs.has_tag != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -135,7 +76,6 @@ jobs:
 
       - name: Commit synced changes
         id: commit
-        if: steps.release.outputs.has_release == 'true' && steps.existing-tag.outputs.has_tag != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -151,17 +91,16 @@ jobs:
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Push sync commit
-        if: steps.commit.outputs.has_changes == 'true' && steps.release.outputs.has_release == 'true' && steps.existing-tag.outputs.has_tag != 'true'
+        if: steps.commit.outputs.has_changes == 'true'
         shell: bash
         run: |
           git push origin HEAD:main
 
       - name: Create and push version tag
-        if: steps.release.outputs.has_release == 'true' && steps.existing-tag.outputs.has_tag != 'true'
         shell: bash
         run: |
           set -euo pipefail
-          version="${{ steps.release.outputs.release_tag }}"
+          version="${{ steps.sync.outputs.version }}"
           if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
             echo "Tag $version already exists. Skipping."
             exit 0
