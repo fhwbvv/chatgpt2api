@@ -1,140 +1,99 @@
 from __future__ import annotations
-
-from dataclasses import dataclass
 import json
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+from services.paths import get_base_dir
+
+BASE_DIR = get_base_dir()
 DATA_DIR = BASE_DIR / "data"
 CONFIG_FILE = BASE_DIR / "config.json"
-VERSION_FILE = BASE_DIR / "VERSION"
 
 
 @dataclass(frozen=True)
-class LoadedSettings:
+class AppSettings:
     auth_key: str
+    host: str
+    port: int
+    accounts_file: Path
     refresh_account_interval_minute: int
 
 
-def _normalize_auth_key(value: object) -> str:
-    return str(value or "").strip()
-
-
-def _is_invalid_auth_key(value: object) -> bool:
-    return _normalize_auth_key(value) == ""
-
-
-def _read_json_object(path: Path, *, name: str) -> dict[str, object]:
+def _readable_json_file(path: Path, *, name: str) -> Path | None:
     if not path.exists():
-        return {}
+        return None
     if path.is_dir():
         print(
             f"Warning: {name} at '{path}' is a directory, ignoring it and falling back to other configuration sources.",
             file=sys.stderr,
         )
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
+        return None
+    return path
 
 
-def _load_settings() -> LoadedSettings:
+def _load_json_object(path: Path, *, name: str) -> dict[str, object]:
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return {}
+    loaded = json.loads(text)
+    if not isinstance(loaded, dict):
+        raise ValueError(f"{name} must be a JSON object")
+    return loaded
+
+
+def _load_settings() -> AppSettings:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    raw_config = _read_json_object(CONFIG_FILE, name="config.json")
-    auth_key = _normalize_auth_key(os.getenv("CHATGPT2API_AUTH_KEY") or raw_config.get("auth-key"))
-    if _is_invalid_auth_key(auth_key):
+
+    # 优先使用环境变量，文件配置仅作为本地/自托管回退
+    raw_config: dict[str, object] = {}
+    config_file = _readable_json_file(CONFIG_FILE, name="config.json")
+    if config_file is not None:
+        raw_config.update(_load_json_object(config_file, name="config.json"))
+
+    auth_key = str(
+        os.getenv("CHATGPT2API_AUTH_KEY")
+        or raw_config.get("auth-key")
+        or ""
+    ).strip()
+
+    if not auth_key:
         raise ValueError(
             "❌ auth-key 未设置！\n"
-            "请在环境变量 CHATGPT2API_AUTH_KEY 中设置，或者在 config.json 中填写 auth-key。"
+            "请按以下任意一种方式解决：\n"
+            "1. 在 Render 的 Environment 变量中添加：\n"
+            "   CHATGPT2API_AUTH_KEY = your_real_auth_key\n"
+            "2. 或者在 config.json 中填写：\n"
+            '   "auth-key": "your_real_auth_key"'
         )
 
-    try:
-        refresh_interval = int(raw_config.get("refresh_account_interval_minute", 5))
-    except (TypeError, ValueError):
-        refresh_interval = 5
+    refresh_account_interval_minute = cast(
+        int, raw_config.get("refresh_account_interval_minute", 60)
+    )
 
-    return LoadedSettings(
+    host = str(
+        os.getenv("CHATGPT2API_HOST")
+        or os.getenv("HOST")
+        or raw_config.get("host")
+        or "0.0.0.0"
+    ).strip() or "0.0.0.0"
+
+    port = int(
+        os.getenv("CHATGPT2API_PORT")
+        or os.getenv("PORT")
+        or raw_config.get("port")
+        or 8000
+    )
+
+    return AppSettings(
         auth_key=auth_key,
-        refresh_account_interval_minute=refresh_interval,
+        host=host,
+        port=port,
+        accounts_file=DATA_DIR / "accounts.json",
+        refresh_account_interval_minute=refresh_account_interval_minute,
     )
 
 
-class ConfigStore:
-    def __init__(self, path: Path):
-        self.path = path
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        self.data = self._load()
-        if _is_invalid_auth_key(self.auth_key):
-            raise ValueError(
-                "❌ auth-key 未设置！\n"
-                "请按以下任意一种方式解决：\n"
-                "1. 在 Render 的 Environment 变量中添加：\n"
-                "   CHATGPT2API_AUTH_KEY = your_real_auth_key\n"
-                "2. 或者在 config.json 中填写：\n"
-                '   "auth-key": "your_real_auth_key"'
-            )
-
-    def _load(self) -> dict[str, object]:
-        return _read_json_object(self.path, name="config.json")
-
-    def _save(self) -> None:
-        self.path.write_text(json.dumps(self.data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-    @property
-    def auth_key(self) -> str:
-        return _normalize_auth_key(os.getenv("CHATGPT2API_AUTH_KEY") or self.data.get("auth-key"))
-
-    @property
-    def accounts_file(self) -> Path:
-        return DATA_DIR / "accounts.json"
-
-    @property
-    def refresh_account_interval_minute(self) -> int:
-        try:
-            return int(self.data.get("refresh_account_interval_minute", 5))
-        except (TypeError, ValueError):
-            return 5
-
-    @property
-    def images_dir(self) -> Path:
-        path = DATA_DIR / "images"
-        path.mkdir(parents=True, exist_ok=True)
-        return path
-
-    @property
-    def base_url(self) -> str:
-        return str(
-            os.getenv("CHATGPT2API_BASE_URL")
-            or self.data.get("base_url")
-            or ""
-        ).strip().rstrip("/")
-
-    @property
-    def app_version(self) -> str:
-        try:
-            value = VERSION_FILE.read_text(encoding="utf-8").strip()
-        except FileNotFoundError:
-            return "0.0.0"
-        return value or "0.0.0"
-
-    def get(self) -> dict[str, object]:
-        return dict(self.data)
-
-    def get_proxy_settings(self) -> str:
-        return str(self.data.get("proxy") or "").strip()
-
-    def update(self, data: dict[str, object]) -> dict[str, object]:
-        next_data = dict(self.data)
-        next_data.update(dict(data or {}))
-        if _is_invalid_auth_key(next_data.get("auth-key")):
-            next_data["auth-key"] = self.data.get("auth-key") or os.getenv("CHATGPT2API_AUTH_KEY") or ""
-        self.data = next_data
-        self._save()
-        return self.get()
-
-
-config = ConfigStore(CONFIG_FILE)
+config = _load_settings()
