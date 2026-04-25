@@ -9,9 +9,10 @@ import { clearStoredAuthKey } from "@/store/auth";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/image", label: "画图" },
-  { href: "/accounts", label: "号池管理" },
-  { href: "/settings", label: "设置" },
+  { href: "/image", label: "\u753b\u56fe" },
+  { href: "/accounts", label: "\u53f7\u6c60\u7ba1\u7406" },
+  { href: "/settings", label: "\u8bbe\u7f6e" },
+  { href: "/user-images", label: "\u4f5c\u54c1" },
 ];
 
 export function TopNav() {
@@ -75,7 +76,7 @@ export function TopNav() {
             className="py-2 text-sm text-stone-400 transition hover:text-stone-700"
             onClick={() => void handleLogout()}
           >
-            退出
+            {"\u9000\u51fa"}
           </button>
         </div>
       </div>
