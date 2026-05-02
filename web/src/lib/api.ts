@@ -1,18 +1,9 @@
 import { httpRequest } from "@/lib/request";
 
-export type AccountType = "Free" | "Plus" | "Pro" | "Team";
+export type AccountType = "Free" | "Plus" | "ProLite" | "Pro" | "Team";
 export type AccountStatus = "正常" | "限流" | "异常" | "禁用";
-export type ImageModel = "gpt-image-1" | "gpt-image-2";
-export type GeneratedImageItem = {
-  url?: string;
-  b64_json?: string;
-  revised_prompt?: string;
-};
-
-export type GeneratedImageResponse = {
-  created: number;
-  data: GeneratedImageItem[];
-};
+export type ImageModel = "gpt-image-2" | "codex-gpt-image-2";
+export type AuthRole = "admin" | "user";
 
 export type Account = {
   id: string;
@@ -20,6 +11,7 @@ export type Account = {
   type: AccountType;
   status: AccountStatus;
   quota: number;
+  imageQuotaUnknown?: boolean;
   email?: string | null;
   user_id?: string | null;
   limits_progress?: Array<{
@@ -58,9 +50,114 @@ type AccountUpdateResponse = {
   items: Account[];
 };
 
+export type SettingsConfig = {
+  proxy: string;
+  base_url?: string;
+  refresh_account_interval_minute?: number | string;
+  image_retention_days?: number | string;
+  auto_remove_invalid_accounts?: boolean;
+  auto_remove_rate_limited_accounts?: boolean;
+  log_levels?: string[];
+  [key: string]: unknown;
+};
+
+export type ManagedImage = {
+  path?: string;
+  name: string;
+  date: string;
+  size: number;
+  url: string;
+  created_at: string;
+};
+
+export type SystemLog = {
+  time: string;
+  type: "call" | "account" | string;
+  summary?: string;
+  detail?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+export type ImageResponse = {
+  created: number;
+  data: Array<{ b64_json?: string; url?: string; revised_prompt?: string }>;
+};
+
+export type ImageTask = {
+  id: string;
+  status: "queued" | "running" | "success" | "error";
+  mode: "generate" | "edit";
+  model?: ImageModel;
+  size?: string;
+  created_at: string;
+  updated_at: string;
+  data?: Array<{ b64_json?: string; url?: string; revised_prompt?: string }>;
+  error?: string;
+};
+
+type ImageTaskListResponse = {
+  items: ImageTask[];
+  missing_ids: string[];
+};
+
+export type LoginResponse = {
+  ok: boolean;
+  version: string;
+  role: AuthRole;
+  subject_id: string;
+  name: string;
+};
+
+export type UserKey = {
+  id: string;
+  name: string;
+  role: "user";
+  enabled: boolean;
+  created_at: string | null;
+  last_used_at: string | null;
+};
+
+export type RegisterConfig = {
+  enabled: boolean;
+  mail: {
+    request_timeout: number;
+    wait_timeout: number;
+    wait_interval: number;
+    providers: Array<Record<string, unknown>>;
+  };
+  proxy: string;
+  total: number;
+  threads: number;
+  mode: "total" | "quota" | "available";
+  target_quota: number;
+  target_available: number;
+  check_interval: number;
+  stats: {
+    job_id?: string;
+    success: number;
+    fail: number;
+    done: number;
+    running: number;
+    threads: number;
+    elapsed_seconds?: number;
+    avg_seconds?: number;
+    success_rate?: number;
+    current_quota?: number;
+    current_available?: number;
+    started_at?: string;
+    updated_at?: string;
+    finished_at?: string;
+  };
+  logs?: Array<{
+    time: string;
+    text: string;
+    level: string;
+  }>;
+};
+
 export async function login(authKey: string) {
   const normalizedAuthKey = String(authKey || "").trim();
-  return httpRequest<{ ok: boolean }>("/auth/login", {
+  return httpRequest<LoginResponse>("/auth/login", {
     method: "POST",
     body: {},
     headers: {
@@ -112,22 +209,23 @@ export async function updateAccount(
   });
 }
 
-export async function generateImage(prompt: string, model: ImageModel = "gpt-image-1") {
-  return httpRequest<GeneratedImageResponse>(
+export async function generateImage(prompt: string, model?: ImageModel, size?: string) {
+  return httpRequest<ImageResponse>(
     "/v1/images/generations",
     {
       method: "POST",
       body: {
         prompt,
-        model,
+        ...(model ? { model } : {}),
+        ...(size ? { size } : {}),
         n: 1,
-        response_format: "url",
+        response_format: "b64_json",
       },
     },
   );
 }
 
-export async function editImage(files: File | File[], prompt: string, model: ImageModel = "gpt-image-1") {
+export async function editImage(files: File | File[], prompt: string, model?: ImageModel, size?: string) {
   const formData = new FormData();
   const uploadFiles = Array.isArray(files) ? files : [files];
 
@@ -135,17 +233,148 @@ export async function editImage(files: File | File[], prompt: string, model: Ima
     formData.append("image", file);
   });
   formData.append("prompt", prompt);
-  formData.append("model", model);
+  if (model) {
+    formData.append("model", model);
+  }
+  if (size) {
+    formData.append("size", size);
+  }
   formData.append("n", "1");
-  formData.append("response_format", "url");
 
-  return httpRequest<GeneratedImageResponse>(
+  return httpRequest<ImageResponse>(
     "/v1/images/edits",
     {
       method: "POST",
       body: formData,
     },
   );
+}
+
+export async function createImageGenerationTask(clientTaskId: string, prompt: string, model?: ImageModel, size?: string) {
+  return httpRequest<ImageTask>("/api/image-tasks/generations", {
+    method: "POST",
+    body: {
+      client_task_id: clientTaskId,
+      prompt,
+      ...(model ? { model } : {}),
+      ...(size ? { size } : {}),
+    },
+  });
+}
+
+export async function createImageEditTask(
+  clientTaskId: string,
+  files: File | File[],
+  prompt: string,
+  model?: ImageModel,
+  size?: string,
+) {
+  const formData = new FormData();
+  const uploadFiles = Array.isArray(files) ? files : [files];
+
+  uploadFiles.forEach((file) => {
+    formData.append("image", file);
+  });
+  formData.append("client_task_id", clientTaskId);
+  formData.append("prompt", prompt);
+  if (model) {
+    formData.append("model", model);
+  }
+  if (size) {
+    formData.append("size", size);
+  }
+
+  return httpRequest<ImageTask>("/api/image-tasks/edits", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function fetchImageTasks(ids: string[]) {
+  const params = new URLSearchParams();
+  if (ids.length > 0) {
+    params.set("ids", ids.join(","));
+  }
+  return httpRequest<ImageTaskListResponse>(`/api/image-tasks${params.toString() ? `?${params.toString()}` : ""}`);
+}
+
+export async function fetchSettingsConfig() {
+  return httpRequest<{ config: SettingsConfig }>("/api/settings");
+}
+
+export async function updateSettingsConfig(settings: SettingsConfig) {
+  return httpRequest<{ config: SettingsConfig }>("/api/settings", {
+    method: "POST",
+    body: settings,
+  });
+}
+
+export async function fetchManagedImages(filters: { start_date?: string; end_date?: string }) {
+  const params = new URLSearchParams();
+  if (filters.start_date) params.set("start_date", filters.start_date);
+  if (filters.end_date) params.set("end_date", filters.end_date);
+  return httpRequest<{ items: ManagedImage[]; groups: Array<{ date: string; items: ManagedImage[] }> }>(
+    `/api/images${params.toString() ? `?${params.toString()}` : ""}`,
+  );
+}
+
+export async function deleteManagedImages(body: { paths?: string[]; start_date?: string; end_date?: string; all_matching?: boolean }) {
+  return httpRequest<{ removed: number }>("/api/images/delete", { method: "POST", body });
+}
+
+export async function fetchSystemLogs(filters: { type?: string; start_date?: string; end_date?: string }) {
+  const params = new URLSearchParams();
+  if (filters.type) params.set("type", filters.type);
+  if (filters.start_date) params.set("start_date", filters.start_date);
+  if (filters.end_date) params.set("end_date", filters.end_date);
+  return httpRequest<{ items: SystemLog[] }>(`/api/logs${params.toString() ? `?${params.toString()}` : ""}`);
+}
+
+export async function fetchUserKeys() {
+  return httpRequest<{ items: UserKey[] }>("/api/auth/users");
+}
+
+export async function createUserKey(name: string) {
+  return httpRequest<{ item: UserKey; key: string; items: UserKey[] }>("/api/auth/users", {
+    method: "POST",
+    body: { name },
+  });
+}
+
+export async function updateUserKey(keyId: string, updates: { enabled?: boolean; name?: string }) {
+  return httpRequest<{ item: UserKey; items: UserKey[] }>(`/api/auth/users/${keyId}`, {
+    method: "POST",
+    body: updates,
+  });
+}
+
+export async function deleteUserKey(keyId: string) {
+  return httpRequest<{ items: UserKey[] }>(`/api/auth/users/${keyId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchRegisterConfig() {
+  return httpRequest<{ register: RegisterConfig }>("/api/register");
+}
+
+export async function updateRegisterConfig(updates: Partial<RegisterConfig>) {
+  return httpRequest<{ register: RegisterConfig }>("/api/register", {
+    method: "POST",
+    body: updates,
+  });
+}
+
+export async function startRegister() {
+  return httpRequest<{ register: RegisterConfig }>("/api/register/start", { method: "POST" });
+}
+
+export async function stopRegister() {
+  return httpRequest<{ register: RegisterConfig }>("/api/register/stop", { method: "POST" });
+}
+
+export async function resetRegister() {
+  return httpRequest<{ register: RegisterConfig }>("/api/register/reset", { method: "POST" });
 }
 
 // ── CPA (CLIProxyAPI) ──────────────────────────────────────────────
@@ -216,4 +445,132 @@ export async function startCPAImport(poolId: string, names: string[]) {
 
 export async function fetchCPAPoolImportJob(poolId: string) {
   return httpRequest<{ import_job: CPAImportJob | null }>(`/api/cpa/pools/${poolId}/import`);
+}
+
+// ── Sub2API ────────────────────────────────────────────────────────
+
+export type Sub2APIServer = {
+  id: string;
+  name: string;
+  base_url: string;
+  email: string;
+  has_api_key: boolean;
+  group_id: string;
+  import_job?: CPAImportJob | null;
+};
+
+export type Sub2APIRemoteAccount = {
+  id: string;
+  name: string;
+  email: string;
+  plan_type: string;
+  status: string;
+  expires_at: string;
+  has_refresh_token: boolean;
+};
+
+export type Sub2APIRemoteGroup = {
+  id: string;
+  name: string;
+  description: string;
+  platform: string;
+  status: string;
+  account_count: number;
+  active_account_count: number;
+};
+
+export async function fetchSub2APIServers() {
+  return httpRequest<{ servers: Sub2APIServer[] }>("/api/sub2api/servers");
+}
+
+export async function createSub2APIServer(server: {
+  name: string;
+  base_url: string;
+  email: string;
+  password: string;
+  api_key: string;
+  group_id: string;
+}) {
+  return httpRequest<{ server: Sub2APIServer; servers: Sub2APIServer[] }>("/api/sub2api/servers", {
+    method: "POST",
+    body: server,
+  });
+}
+
+export async function updateSub2APIServer(
+  serverId: string,
+  updates: {
+    name?: string;
+    base_url?: string;
+    email?: string;
+    password?: string;
+    api_key?: string;
+    group_id?: string;
+  },
+) {
+  return httpRequest<{ server: Sub2APIServer; servers: Sub2APIServer[] }>(`/api/sub2api/servers/${serverId}`, {
+    method: "POST",
+    body: updates,
+  });
+}
+
+export async function fetchSub2APIServerGroups(serverId: string) {
+  return httpRequest<{ server_id: string; groups: Sub2APIRemoteGroup[] }>(
+    `/api/sub2api/servers/${serverId}/groups`,
+  );
+}
+
+export async function deleteSub2APIServer(serverId: string) {
+  return httpRequest<{ servers: Sub2APIServer[] }>(`/api/sub2api/servers/${serverId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchSub2APIServerAccounts(serverId: string) {
+  return httpRequest<{ server_id: string; accounts: Sub2APIRemoteAccount[] }>(
+    `/api/sub2api/servers/${serverId}/accounts`,
+  );
+}
+
+export async function startSub2APIImport(serverId: string, accountIds: string[]) {
+  return httpRequest<{ import_job: CPAImportJob | null }>(`/api/sub2api/servers/${serverId}/import`, {
+    method: "POST",
+    body: { account_ids: accountIds },
+  });
+}
+
+export async function fetchSub2APIImportJob(serverId: string) {
+  return httpRequest<{ import_job: CPAImportJob | null }>(`/api/sub2api/servers/${serverId}/import`);
+}
+
+// ── Upstream proxy ────────────────────────────────────────────────
+
+export type ProxySettings = {
+  enabled: boolean;
+  url: string;
+};
+
+export type ProxyTestResult = {
+  ok: boolean;
+  status: number;
+  latency_ms: number;
+  error: string | null;
+};
+
+export async function fetchProxy() {
+  return httpRequest<{ proxy: ProxySettings }>("/api/proxy");
+}
+
+export async function updateProxy(updates: { enabled?: boolean; url?: string }) {
+  return httpRequest<{ proxy: ProxySettings }>("/api/proxy", {
+    method: "POST",
+    body: updates,
+  });
+}
+
+export async function testProxy(url?: string) {
+  return httpRequest<{ result: ProxyTestResult }>("/api/proxy/test", {
+    method: "POST",
+    body: { url: url ?? "" },
+  });
 }
