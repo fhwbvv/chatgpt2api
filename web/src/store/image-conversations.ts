@@ -36,6 +36,8 @@ export type ImageTurn = {
   createdAt: string;
   status: ImageTurnStatus;
   error?: string;
+  promptDeleted?: boolean;
+  resultsDeleted?: boolean;
 };
 
 export type ImageConversation = {
@@ -144,6 +146,8 @@ function normalizeTurn(turn: ImageTurn & Record<string, unknown>): ImageTurn {
         ? turn.status
         : derivedStatus,
     error: typeof turn.error === "string" ? turn.error : undefined,
+    promptDeleted: turn.promptDeleted === true,
+    resultsDeleted: turn.resultsDeleted === true,
   };
 }
 
@@ -242,6 +246,20 @@ export async function saveImageConversation(conversation: ImageConversation): Pr
   });
 }
 
+export async function renameImageConversation(id: string, title: string): Promise<void> {
+  await queueImageConversationWrite(async () => {
+    const items = await readStoredImageConversations();
+    const target = items.find((item) => item.id === id);
+    if (!target) return;
+    const updated = { ...target, title, updatedAt: new Date().toISOString() };
+    const nextItems = sortImageConversations([
+      updated,
+      ...items.filter((item) => item.id !== id),
+    ]);
+    await imageConversationStorage.setItem(IMAGE_CONVERSATIONS_KEY, nextItems);
+  });
+}
+
 export async function deleteImageConversation(id: string): Promise<void> {
   await queueImageConversationWrite(async () => {
     const items = await readStoredImageConversations();
@@ -265,6 +283,9 @@ export function getImageConversationStats(conversation: ImageConversation | null
 
   return conversation.turns.reduce(
     (acc, turn) => {
+      if (turn.resultsDeleted) {
+        return acc;
+      }
       if (turn.status === "queued") {
         acc.queued += 1;
       } else if (turn.status === "generating") {
