@@ -21,6 +21,12 @@ const nextConfig: NextConfig = {
     env: {
         NEXT_PUBLIC_APP_VERSION: appVersion,
     },
+    experimental: {
+        // FreeBSD hosts like serv00 can hit process limits during static export.
+        staticGenerationMaxConcurrency: 1,
+        staticGenerationMinPagesPerWorker: 10_000,
+        webpackMemoryOptimizations: true,
+    },
     output: 'export',
     trailingSlash: true,
     images: {
