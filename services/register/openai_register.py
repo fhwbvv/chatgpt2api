@@ -16,11 +16,11 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 import requests
 import urllib3
-from curl_cffi import requests as curl_requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from services.account_service import account_service
+from services.compat.http import requests as curl_requests
 from services.register import mail_provider
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

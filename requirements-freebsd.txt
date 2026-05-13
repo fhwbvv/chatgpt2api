@@ -1,0 +1,21 @@
+# FreeBSD / serv00 source deployment dependencies.
+# Install with your site Python, for example:
+#   python3.12 -m pip install --user -r requirements-freebsd.txt
+
+a2wsgi>=1.10.10
+fastapi>=0.136.0
+gitpython>=3.1.0
+pillow>=12.2.0
+PySocks>=1.7.1
+python-multipart>=0.0.26
+requests>=2.32.4
+sqlalchemy>=2.0.0
+uvicorn>=0.44.0
+
+# Optional but recommended when wheels are available on your host:
+# pybase64>=1.4.3
+# tiktoken>=0.12.0
+
+# Optional storage backends:
+# psycopg2-binary>=2.9.0
+

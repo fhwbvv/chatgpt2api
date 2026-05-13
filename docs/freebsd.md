@@ -22,13 +22,13 @@ No separate Python installation is required to run the packaged build.
 If you deploy from the source tree on serv00 instead of using a release archive, create a virtual environment and install:
 
 ```sh
-python3 -m venv .venv
+python3.12 -m venv .venv
 . .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements-freebsd.txt
 ```
 
-For serv00 `Website type = Python`, use Passenger instead of a manual port. The project root should contain `passenger_wsgi.py`, and this repository now includes that file. In the panel, point `Python binary` to your virtualenv interpreter.
+For serv00 `Website type = Python`, use Passenger instead of a manual port. The project root already includes `passenger_wsgi.py` and `wsgi.py`. In the panel, point `Python binary` to your virtualenv interpreter.
 
 ## Configure
 
@@ -54,6 +54,10 @@ You can also override host and port via environment variables:
 - `HOST`
 - `PORT`
 - `CHATGPT2API_AUTH_KEY`
+
+If you are only deploying the Python backend on serv00, the app can run without built frontend assets. In that case `/` shows a simple fallback page and the API remains available. If you want the full web UI, build/export the frontend and place the generated files in `web_dist/`.
+
+For a direct source deployment on serv00 with Passenger, see `docs/serv00.md`.
 
 ## Start
 

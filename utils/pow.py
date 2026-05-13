@@ -3,11 +3,20 @@ import json
 import random
 import re
 import time
+import base64
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from typing import Any, Sequence
 
-import pybase64
+try:
+    import pybase64
+except ImportError:
+    class _PyBase64Compat:
+        @staticmethod
+        def b64encode(data: bytes) -> bytes:
+            return base64.b64encode(data)
+
+    pybase64 = _PyBase64Compat()
 
 DEFAULT_POW_SCRIPT = "https://chatgpt.com/backend-api/sentinel/sdk.js"
 from utils.helper import new_uuid

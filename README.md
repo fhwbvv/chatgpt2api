@@ -74,6 +74,12 @@ environment:
   - DATABASE_URL=postgresql://user:password@host:5432/dbname
 ```
 
+### Deployment notes
+
+- FreeBSD bundle notes: `docs/freebsd.md`
+- serv00 Passenger source deployment: `docs/serv00.md`
+- serv00 helper script: `scripts/deploy-serv00.sh`
+
 ## 功能
 
 ### API 兼容能力
