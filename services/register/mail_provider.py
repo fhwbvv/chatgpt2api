@@ -12,7 +12,7 @@ from threading import Lock
 from typing import Any, Callable, TypeVar
 
 import requests
-from services.compat.http import requests as curl_requests
+from curl_cffi import requests as curl_requests
 
 
 ResultT = TypeVar("ResultT")

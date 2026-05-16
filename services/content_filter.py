@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from services.compat.http import requests
+from curl_cffi import requests
 from fastapi import HTTPException
 
 from services.config import config

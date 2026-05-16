@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
+web_dist
 # Virtual environments
 .venv
 .idea

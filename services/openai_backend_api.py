@@ -8,10 +8,10 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Iterator, Optional
 
+from curl_cffi import requests
 from PIL import Image
 
 from services.account_service import account_service
-from services.compat.http import requests
 from services.config import config
 from services.proxy_service import proxy_settings
 from utils.helper import ensure_ok, iter_sse_payloads, new_uuid

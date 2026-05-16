@@ -7,8 +7,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterator
 
+from curl_cffi import requests
 from fastapi import HTTPException
-from services.compat.http import requests
 from utils.log import logger
 
 IMAGE_MODELS = {"gpt-image-2", "codex-gpt-image-2"}

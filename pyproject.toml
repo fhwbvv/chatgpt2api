@@ -3,21 +3,18 @@ name = "chatgpt2api"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
-    "a2wsgi>=1.10.10",
-    "curl-cffi>=0.15.0; platform_system != 'FreeBSD'",
+    "curl-cffi>=0.15.0",
     "fastapi>=0.136.0",
-    "gitpython>=3.1.0",
     "pillow>=12.2.0",
     "pybase64>=1.4.3",
-    "PySocks>=1.7.1",
     "python-multipart>=0.0.26",
-    "requests>=2.32.4",
     "tiktoken>=0.12.0",
+    "uvicorn>=0.44.0",
     "sqlalchemy>=2.0.0",
     "psycopg2-binary>=2.9.0",
-    "uvicorn>=0.44.0",
+    "gitpython>=3.1.0",
 ]
 
 [dependency-groups]

@@ -9,18 +9,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
-try:
-    import tiktoken
-except ImportError:
-    tiktoken = None
+import tiktoken
 
 from services.account_service import account_service
 from services.config import config
 from services.openai_backend_api import OpenAIBackendAPI
 from utils.helper import IMAGE_MODELS, extract_image_from_message_content
 from utils.log import logger
-
-_TOKENIZER_FALLBACK_WARNED = False
 
 
 class ImageGenerationError(Exception):
@@ -160,18 +155,6 @@ def build_image_prompt(prompt: str, size: str | None) -> str:
 
 
 def encoding_for_model(model: str):
-    global _TOKENIZER_FALLBACK_WARNED
-    if tiktoken is None:
-        if not _TOKENIZER_FALLBACK_WARNED:
-            logger.warning("tiktoken is unavailable; falling back to approximate token counting.")
-            _TOKENIZER_FALLBACK_WARNED = True
-
-        class _FallbackEncoding:
-            @staticmethod
-            def encode(text: str) -> list[int]:
-                return list(str(text or "").encode("utf-8"))
-
-        return _FallbackEncoding()
     try:
         return tiktoken.encoding_for_model(model)
     except KeyError:

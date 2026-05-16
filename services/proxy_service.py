@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from urllib.parse import urlparse
 
-from services.compat.http import Session
+from curl_cffi.requests import Session
 
 from services.config import config
 
